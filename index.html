@@ -117,6 +117,7 @@ h1 .accent{
 }
 @keyframes shimmer{to{background-position:220% 0;}}
 h1 .ch{display:inline-block;animation:drop .55s cubic-bezier(.18,1.5,.4,1) both;}
+h1 .wd{display:inline-block;white-space:nowrap;}
 @keyframes drop{
   0%{opacity:0;transform:translateY(-26px) rotate(-14deg) scale(.5);}
   100%{opacity:1;transform:none;}
@@ -558,10 +559,16 @@ function cascade(root){
       Array.from(node.childNodes).forEach(n=>{
         if(n.nodeType===3){
           const frag=document.createDocumentFragment();
-          n.textContent.split('').forEach(ch=>{
-            const s=document.createElement('span');
-            s.className='ch'; s.textContent = ch===' ' ? ' ' : ch;
-            frag.appendChild(s);
+          n.textContent.split(/(\s+)/).forEach(part=>{
+            if(!part) return;
+            if(/^\s+$/.test(part)){ frag.appendChild(document.createTextNode(' ')); return; }
+            const wd=document.createElement('span'); wd.className='wd';
+            part.split('').forEach(ch=>{
+              const s=document.createElement('span');
+              s.className='ch'; s.textContent=ch;
+              wd.appendChild(s);
+            });
+            frag.appendChild(wd);
           });
           node.replaceChild(frag,n);
         } else if(n.nodeType===1) walk(n);
