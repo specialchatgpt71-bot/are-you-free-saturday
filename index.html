@@ -15,12 +15,13 @@ const CONFIG = {
   herName:        "Nurijahon",   // ← her name. Leave "" for none.
   telegramToken:  "8707263721:AAGv09pTWURoEBMIsEPoS70nrIbgHTd59tw",            // ← bot token from @BotFather, e.g. "8707263721:AAGv09..."
   telegramChatId: "1098110187",            // ← YOUR admin id from @userinfobot — this is where her choices arrive
-  musicUrl:       "https://extraordinary-amethyst-uz7rbkhz.edgeone.dev/",            // ← DIRECT .mp3 link (a t.me/... page link will NOT play). Leave "" for the built-in melody.
+  musicUrl:       "/song.mp3",            // ← the mp3 sitting next to this file in your repo. Leave "" for the built-in melody.
   dateLabel:      "Sunday, 23 August"   // ← the day you're inviting her to
 };
 </script>
 <!-- ========================================================== -->
 
+<link rel="preload" as="audio" href="/song.mp3">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Jost:wght@200;300;400;500;600&display=swap" rel="stylesheet">
@@ -457,13 +458,47 @@ function buzz(v){ if (navigator.vibrate) { try { navigator.vibrate(v); } catch(e
 /* ---------------- music (your URL, or built-in melody) ---------------- */
 const MELODY = [440,554.37,659.25,587.33,493.88,659.25,880,739.99,659.25,554.37,493.88,587.33];
 let audio = null, actx = null, master = null, bus = null, mi = 0, noteTimer = null, musicReady = false;
+function makeAudio(){
+  if (audio || !CONFIG.musicUrl) return audio;
+  audio = new Audio(CONFIG.musicUrl);
+  audio.loop = true;
+  audio.preload = "auto";
+  audio.volume = 0;
+  audio.setAttribute("playsinline", "");
+  audio.addEventListener("error", () => { audio = null; if (musicReady) synth(); });
+  return audio;
+}
+
+/* runs the moment the page loads.
+   1st try: play with sound  -> some browsers allow it, music starts instantly.
+   2nd try: play muted       -> almost always allowed, so the track is already
+                                rolling and the first touch only un-mutes it. */
+function autoStart(){
+  if (!makeAudio()) return;               // no URL -> built-in melody waits for a tap
+  audio.muted = false;
+  audio.play().then(() => {
+    musicReady = true;
+    fadeAudio(state.music ? .55 : 0);
+  }).catch(() => {
+    audio.muted = true;
+    audio.play().then(() => { musicReady = true; }).catch(() => {});
+  });
+}
+
 function startMusic(){
-  if (musicReady){ if (audio && state.music) audio.play().catch(()=>{}); if (actx && actx.state === "suspended") actx.resume(); return; }
+  if (audio){
+    musicReady = true;
+    if (audio.muted){ audio.muted = false; audio.volume = 0; }
+    if (state.music){
+      if (audio.paused) audio.play().catch(() => { audio = null; synth(); });
+      if (audio.volume < .05) fadeAudio(.55);
+    }
+    return;
+  }
+  if (musicReady){ if (actx && actx.state === "suspended") actx.resume(); return; }
   musicReady = true;
   if (CONFIG.musicUrl){
-    audio = new Audio(CONFIG.musicUrl);
-    audio.loop = true; audio.volume = 0;
-    audio.addEventListener("error", () => { audio = null; synth(); });
+    makeAudio();
     audio.play().then(() => fadeAudio(state.music ? .55 : 0)).catch(() => { audio = null; synth(); });
   } else synth();
 }
@@ -523,6 +558,16 @@ document.addEventListener("pointerdown", e => {
   if (e.target && e.target.id === "no") return;
   spawn(e.clientX, e.clientY, 7, { minSpd:1, maxSpd:4.2, g:.08 });
 }, { passive:true });
+
+/* any kind of interaction counts as the "gesture" browsers ask for */
+["touchstart","touchend","mousedown","click","keydown","scroll","wheel"].forEach(ev =>
+  document.addEventListener(ev, startMusic, { passive:true, capture:true }));
+
+/* and try straight away, before anyone touches anything */
+autoStart();
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && audio && audio.paused && state.music && musicReady) audio.play().catch(()=>{});
+});
 
 /* ---------------- telegram ---------------- */
 function tg(text){
