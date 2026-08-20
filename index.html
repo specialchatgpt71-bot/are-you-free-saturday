@@ -465,6 +465,7 @@ function makeAudio(){
   audio.preload = "auto";
   audio.volume = 0;
   audio.setAttribute("playsinline", "");
+  audio.setAttribute("webkit-playsinline", "");
   audio.addEventListener("error", () => { audio = null; if (musicReady) synth(); });
   return audio;
 }
@@ -485,18 +486,31 @@ function autoStart(){
   });
 }
 
+let unlocked = false;
 function startMusic(){
   if (audio){
     musicReady = true;
-    if (audio.muted){ audio.muted = false; audio.volume = 0; }
-    if (state.music){
-      if (audio.paused) audio.play().catch(() => { audio = null; synth(); });
-      if (audio.volume < .05) fadeAudio(.55);
+    if (!state.music) return;
+    /* iOS/Android only really unlock an audio element when play() is called
+       from inside a genuine finger tap. Muted autoplay is NOT enough, so the
+       first gesture restarts playback properly. Volume is 0 here, so silent. */
+    if (!unlocked){
+      unlocked = true;
+      audio.muted = false;
+      audio.volume = 0;
+      try { audio.pause(); } catch(e){}
+      audio.play().then(() => fadeAudio(.55))
+                  .catch(() => { audio = null; synth(); });
+      return;
     }
+    audio.muted = false;
+    if (audio.paused) audio.play().catch(() => { audio = null; synth(); });
+    if (audio.volume < .05) fadeAudio(.55);
     return;
   }
   if (musicReady){ if (actx && actx.state === "suspended") actx.resume(); return; }
   musicReady = true;
+  unlocked = true;
   if (CONFIG.musicUrl){
     makeAudio();
     audio.play().then(() => fadeAudio(state.music ? .55 : 0)).catch(() => { audio = null; synth(); });
